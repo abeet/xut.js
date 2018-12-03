@@ -1,7 +1,7 @@
 const beautify = require('js-beautify').js_beautify
 const fs = require('fs')
 const path = require('path');
-const utils = require('./utils')
+const util = require('./util')
 
 function formatJS(filename) {
   let data = fs.readFileSync(filename, 'utf8')
@@ -37,18 +37,19 @@ function formatJS(filename) {
 }
 
 let count = 0
+
 function ls(src) {
   let files = fs.readdirSync(src);
-  for(let file in files) {
+  for (let file in files) {
     var rootPath = src + path.sep
     var filename = rootPath + files[file]
     var stat = fs.lstatSync(filename);
-    if(stat.isDirectory() == true) {
+    if (stat.isDirectory() == true) {
       ls(filename)
     } else {
-      if(/.js/.test(filename)) {
+      if (/.js/.test(filename)) {
         formatJS(filename)
-        ++count
+          ++count
       }
     }
   }
@@ -57,5 +58,4 @@ function ls(src) {
 
 ls('src/lib')
 
-utils.log(`The format of the file number：${count}`, 'debug')
-
+util.log(`The format of the file number：${count}`, 'debug')

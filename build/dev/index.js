@@ -1,45 +1,51 @@
 const fs = require('fs')
 const http = require('http');
-const express = require('express')
-const webpack = require('webpack')
+const path = require('path')
+const cp = require('child_process');
+
+const _ = require("underscore");
 const open = require("open");
 const watch = require('gulp-watch');
-const path = require('path')
-const _ = require("underscore");
+const express = require('express')
+const webpack = require('webpack')
 const fsextra = require('fs-extra')
-const cp = require('child_process');
+
+const util = require('../util')
+const execDebug = require('../debug/index')
+
 //https://github.com/webpack/webpack-dev-middleware#usage
 const webpackDevMiddleware = require("webpack-dev-middleware");
 const webpacHotMiddleware = require('webpack-hot-middleware')
 const killOccupied = require('../kill.occupied')
-const convertSVG = require('../convert.svg')
-const serialData = require('../serial.data')
-
+const convert = require('../convert/index')
 const app = express()
-const config = require('../../config')
-const port = process.env.PORT || config.dev.port
 
-const conf = _.extend(config.dev.conf, {
-  rollup: config.dev.conf.tarDir + 'rollup.js'
-})
+const buildName = process.argv[process.argv.length - 1] || 'webpack-full-dev'
+const config = require('../config')(buildName)
+const port = config.port
 
-convertSVG(conf.srcDir)
-serialData(conf.srcDir)
+/**
+ * 转化
+ * 1 数据 db-json
+ * 2 文件 svg-js
+ */
+convert(config.templateDirPath)
 
-fsextra.removeSync(conf.assetsRoot)
-fsextra.mkdirSync(conf.assetsRoot);
+//清理temp目录
+fsextra.removeSync(config.assetsRootPath)
+fsextra.mkdirSync(config.assetsRootPath)
 
-const webpackConfig = require('./webpack.dev.conf')
+const webpackConfig = require('./webpack.config')(config)
 
-
-/*eslint
-  https://segmentfault.com/a/1190000008575829?utm_source=itdadao&utm_medium=referral
-*/
-if(config.dev.eslint.launch) {
+/**
+ *  eslint
+ *  https://segmentfault.com/a/1190000008575829?utm_source=itdadao&utm_medium=referral
+ **/
+if (config.eslint.launch) {
   webpackConfig.module.rules.push({
     test: /\.js$/,
-    enforce: "pre",//在babel-loader对源码进行编译前进行lint的检查
-    include: config.dev.eslint.dir,
+    enforce: "pre", //在babel-loader对源码进行编译前进行lint的检查
+    include: config.eslint.includePath,
     exclude: /node_modules/,
     use: [{
       loader: "eslint-loader",
@@ -91,43 +97,30 @@ app.use(devMiddleware)
 // compilation error display
 app.use(hotMiddleware)
 
-app.use('/lib', express.static('src/lib'));
-app.use('/css', express.static('src/css'));
-app.use('/images', express.static('src/images'));
-app.use('/content', express.static('src/content'));
+app.use('/src', express.static('src'));
+app.use('/css', express.static('template/css'));
+app.use('/images', express.static('template/images'));
+app.use('/content', express.static('template/content'));
 
 
 let first = true
-let preChildRun = null
-watch(conf.assetsRoot + '/app.js', () => {
-  if(first) {
+watch(path.join(config.assetsRootPath, config.assetsName), () => {
+  if (config.openBrowser && first) {
     open("http://localhost:" + port)
     first = false
   }
-  if(config.dev.debug.launch) {
-    console.log(
-      '\n' +
-      'debug mode : to regenerate the file'
-    )
-    if(preChildRun) {
-      preChildRun.kill()
-      preChildRun = null
-    }
-    let child = cp.spawn('node', ['build/dev/debug.js', ['debug=' + config.dev.debug.dir]]);
-    child.stdout.on('data', (data) => console.log('\n' + data))
-    child.stderr.on('data', (data) => console.log('fail out：\n' + data));
-    child.on('close', (code) => console.log('complete：' + code));
-    preChildRun = child
+  if (config.debug.launch) {
+    execDebug(config)
   }
 })
 
 
 killOccupied(port, () => {
   app.listen(port, (err) => {
-    if(err) {
-      console.log(err)
+    if (err) {
+      util.log(err)
       return
     }
-    console.log('Listening at http://localhost:' + port + '\n')
+    util.log('Listening at http://localhost:' + port + '\n')
   })
 })
